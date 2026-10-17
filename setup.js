@@ -42,8 +42,8 @@ function linkFor(key){
 function stepBody(key){
  var u=linkFor(key),pending='<div class="wait">Your LaunchRiot contact will send your '+(key==='whatsapp'?'QR code':'connect link')+' here shortly. You do not need to do anything yet.</div>';
  if(key==='whatsapp'){
-  var h='<ol><li>Open WhatsApp on your phone.</li><li>Go to Settings, then Linked devices.</li><li>Tap Link a device and scan the code below.</li></ol>';
-  return h+(u?'<img class="qr" alt="WhatsApp QR code" src="'+esc(u)+'">':pending);
+  if(!u)return pending;
+  return '<ol><li>Open WhatsApp on your phone.</li><li>Go to Settings, then Linked devices.</li><li>Tap Link a device and scan the code below.</li></ol><img class="qr" alt="WhatsApp QR code" src="'+esc(u)+'">';
  }
  if(key==='gmail')return '<p>Connect your Gmail so your assistant can see your mail and follow-ups.</p>'+(u?'<a class="btn" href="'+esc(u)+'">Connect Gmail</a>':pending);
  var fa=typeof (st||{}).forward_address==='string'&&/^[^\s@<>"]+@[^\s@<>"]+$/.test(st.forward_address)?st.forward_address:null;
