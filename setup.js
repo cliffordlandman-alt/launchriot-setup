@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var DOMAIN='145-241-118-107.sslip.io',WA='https://wa.me/971586444285',MAIL='mailto:hello@launchriot.online';
-var app=document.getElementById('app'),S='',C='',API='',st=null,tr=null,team=null,trAt=0,locked=false,pollT=null,tickT=null,slowT=null,first=true,saving=false;
+var app=document.getElementById('app'),S='',C='',API='',st=null,tr=null,team=null,trAt=0,locked=false,pollT=null,tickT=null,slowT=null,first=true,saving=false,pkgSel=null;
 var cfg=window.LR_TEST_API||null;
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function readHash(){
@@ -61,15 +61,20 @@ function render(){
  if(all)h+='<div class="card alldone"><h2>All set</h2><p class="mut">Everything is connected. Your LaunchRiot contact will take it from here.</p></div>';
  STEPS.forEach(function(s,i){var d=st&&st[s[0]]===true;
   h+='<section class="card'+(d?' done':'')+'" data-step="'+s[0]+'"><div class="step '+(d?'done':'')+'"><span class="num">'+(d?'&#10003;':(i+1))+'</span><div class="tx"><h2>'+s[1]+'</h2></div><span class="pill">'+(d?'Done':'Not done')+'</span></div>'+(d?'':'<div class="body">'+stepBody(s[0])+'</div>')+'</section>'});
- if(team&&team.package_types&&team.package_types.length){
-  h+='<section class="card"><h2>Your package</h2><p class="mut">Pick the one that suits you. You can change it later.</p><select id="pkg" aria-label="Package">'+team.package_types.map(function(p){return '<option value="'+esc(p)+'"'+(p===team.package?' selected':'')+'>'+esc(p)+'</option>'}).join('')+'</select> <span class="mut" id="pkgmsg" role="status"></span></section>'}
+ var pl=pkgOptions();
+ if(pl.length){
+  h+='<section class="card"><h2>Your package</h2><p class="mut">Pick the one that suits you. You can change it later.</p><select id="pkg" aria-label="Package">'+pl.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===curPkg()?' selected':'')+'>'+esc(p.label)+'</option>'}).join('')+'</select> <span class="mut" id="pkgmsg" role="status"></span></section>'}
  var keep=document.activeElement&&document.activeElement.id;
  app.innerHTML=h;
  var sel=document.getElementById('pkg');if(sel){sel.onchange=function(){savePkg(sel.value)};if(keep==='pkg')sel.focus()}
  tick();
 }
+function curPkg(){return pkgSel!=null?pkgSel:(st&&st.package)||(team&&team.package)}
+function pkgOptions(){var L=st&&st.package_labels,ids=(st&&st.package_types)||[],out=[];
+ if(!Array.isArray(L))return out;
+ L.forEach(function(x){if(x&&typeof x.id==='string'&&typeof x.label==='string'&&x.label&&x.label!==x.id&&(!ids.length||ids.indexOf(x.id)>=0))out.push(x)});return out}
 function savePkg(v){var m=document.getElementById('pkgmsg');if(m)m.textContent='Saving...';saving=true;
- req('/package',{method:'PUT',body:JSON.stringify({package:v})}).then(function(){team.package=v;saving=false;var m2=document.getElementById('pkgmsg');if(m2)m2.textContent='Saved'}).catch(function(e){saving=false;if(e.locked)return lockScreen();var m3=document.getElementById('pkgmsg');if(m3)m3.textContent='Could not save, please try again'})}
+ req('/package',{method:'PUT',body:JSON.stringify({package:v})}).then(function(){pkgSel=v;saving=false;var m2=document.getElementById('pkgmsg');if(m2)m2.textContent='Saved'}).catch(function(e){saving=false;if(e.locked)return lockScreen();var m3=document.getElementById('pkgmsg');if(m3)m3.textContent='Could not save, please try again'})}
 function tick(){var c=document.getElementById('clock');if(!c)return;var l=left();if(l==null)return;c.textContent=fmt(l);var t=document.getElementById('timer');if(t)t.className='timer'+(l<6*3600?' low':'');if(l<=0&&tr&&tr.status==='trial'){syncTrial()}}
 function syncTrial(){return req('/trial').then(function(t){if(t.locked||t.status==='locked')return lockScreen();tr=t;trAt=Date.now();tick()}).catch(function(e){if(e.locked)lockScreen()})}
 function poll(){
