@@ -40,7 +40,7 @@ function linkFor(key){
  return typeof u==='string'&&(/^https:\/\//.test(u)||/^data:image\/(png|jpeg|svg\+xml);/.test(u))?u:null;
 }
 function steps(key){var o=st||{},l=o.links&&o.links[key],a=(l&&l.instructions)||o[key+'_instructions'];return Array.isArray(a)?a.filter(function(x){return typeof x==='string'&&x}).slice(0,10):[]}
-function linkify(t){return esc(t.replace(/^Open\s+(?=https:\/\/)/,'')).replace(/https:\/\/[^\s<"]+/g,function(u){return '<a href="'+u+'" target="_blank" rel="noopener noreferrer">Create an app password</a>'})}
+function linkify(t){return esc(t)}
 function olist(a){return a.length?'<ol>'+a.map(function(x){return '<li>'+linkify(x)+'</li>'}).join('')+'</ol>':''}
 var gmEmail='',wa={state:null,url:null,connected:false,phone:null},waT=null,waOn=false;
 function waState(){var l=st&&st.links&&st.links.whatsapp;return wa.state||(l&&l.state)||null}
@@ -69,11 +69,12 @@ function waDone(){waStop();
 function waEnsure(){if(locked||!st)return;if(st.whatsapp===true){waStop();if(!wa.phone&&!wa.fetching&&!wa.tried){wa.fetching=true;wa.tried=true;req('/whatsapp/status').then(function(r){wa.phone=typeof r.phone==='string'?r.phone:null;wa.fetching=false;render()}).catch(function(e){wa.fetching=false;if(e.locked)lockScreen()})}return}
  wa.connected=false;if(!waOn)waLoop()}
 
+function appLink(){var l=st&&st.links&&st.links.gmail,u=l&&l.connect_url;return (typeof u==='string'&&/^https:\/\//.test(u))?'<p><a class="btn alt" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">Create an app password</a></p>':''}
 function stepBody(key){
  var u=linkFor(key),pending='<div class="wait">Your LaunchRiot contact will send your QR code here shortly. You do not need to do anything yet.</div>';
  if(key==='whatsapp')return waBody();
  if(key==='gmail'){
-  return '<p>Connect your Gmail so your assistant can see your mail and follow-ups.</p>'+olist(steps('gmail'))+
+  return '<p>Connect your Gmail so your assistant can see your mail and follow-ups.</p>'+olist(steps('gmail'))+appLink()+
   '<form id="gmform" autocomplete="off" novalidate><label for="gmemail">Gmail address</label><input id="gmemail" name="e" type="email" inputmode="email" autocomplete="off" autocapitalize="off" value="'+esc(gmEmail)+'" placeholder="you@gmail.com">'+
   '<label for="gmpw">App password</label><input id="gmpw" name="p" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="16-character password">'+
   '<div class="err" id="gmerr" role="alert"></div><button class="btn" id="gmgo" type="submit">Connect Gmail</button></form>';
@@ -118,7 +119,7 @@ function loadInbox(){
  if(locked||!usable())return Promise.resolve();
  function g(p){return req(p).catch(function(e){if(e.locked||e.auth)throw e;return null})}
  return Promise.all([g('/tasks?status=open'),g('/followups?status=open_all'),g('/drafts?status=pending'),g('/inbox/messages?needs_owner=true')]).then(function(r){
-  var n={todo:r[0]===null&&r[1]===null?null:{tasks:arr(r[0]).filter(function(t){return t.status!=='done'}),fups:arr(r[1]).filter(function(t){return t.status!=='done'})},drafts:r[2]===null?null:arr(r[2]).filter(function(d){return d.status==='pending'}),attn:r[3]===null?null:arr(r[3]).filter(function(m){return m.status!=='resolved'})};
+  var n={todo:r[0]===null&&r[1]===null?null:{tasks:arr(r[0]).filter(function(t){return t.status!=='done'&&t.source==='message'}),fups:arr(r[1]).filter(function(t){return t.status!=='done'&&t.source==='message'})},drafts:r[2]===null?null:arr(r[2]).filter(function(d){return d.status==='pending'}),attn:r[3]===null?null:arr(r[3]).filter(function(m){return m.status!=='resolved'})};
   var ch=JSON.stringify(n)!==JSON.stringify({todo:inb.todo,drafts:inb.drafts,attn:inb.attn});inb.todo=n.todo;inb.drafts=n.drafts;inb.attn=n.attn;inb.ok=true;
   if(ch&&!formBusy()&&!saving)render();
  }).catch(function(e){if(e.locked)lockScreen();else if(e.auth)badLink()});
@@ -130,9 +131,9 @@ function inboxHtml(){
  var h='<h1 class="sech">Your assistant</h1>';
  var t=inb.todo,todo;
  if(!inb.ok)todo='<p class="mut">Loading...</p>';else if(!t)todo='<p class="mut">We could not load this just now. It will retry.</p>';
- else if(!t.tasks.length&&!t.fups.length)todo='<p class="mut">Nothing to do right now.</p>';
+ else if(!t.tasks.length&&!t.fups.length)todo='<p class="mut">Nothing to do from messages right now.</p>';
  else todo='<ul class="list">'+t.tasks.map(function(x){return '<li><b>'+esc(x.title)+'</b>'+(x.deadline?'<span class="mut"> &middot; due '+esc(fdate(x.deadline))+'</span>':'')+(x.priority&&x.priority!=='normal'?' <span class="pill">'+esc(x.priority)+'</span>':'')+'</li>'}).join('')+t.fups.map(function(x){return '<li><b>Follow up: '+esc(x.person)+'</b> <span class="mut">'+esc(x.subject||'')+(x.follow_up_date?' &middot; '+esc(fdate(x.follow_up_date)):'')+'</span></li>'}).join('')+'</ul>';
- h+=sec('To do','todo',todo);
+ h+=sec('To do from messages','todo',todo);
  var d=inb.drafts,dh;
  if(!inb.ok)dh='<p class="mut">Loading...</p>';else if(d===null)dh='<p class="mut">We could not load this just now. It will retry.</p>';
  else if(!d.length)dh='<p class="mut">No replies waiting.</p>';
