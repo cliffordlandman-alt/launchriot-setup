@@ -31,3 +31,9 @@ input:focus,select:focus,.btn:focus-visible,.linkbtn:focus-visible{outline:2px s
 form .btn{margin-top:14px;width:100%}.err{color:#ff8a7a;min-height:1.2em;margin-top:8px;font-size:15px}
 .linkbtn{background:none;border:0;color:var(--mut);text-decoration:underline;font:inherit;font-size:14px;cursor:pointer;padding:8px 0;min-height:44px}
 .body ol a{overflow-wrap:anywhere}
+
+.sech{margin-top:28px}.list{padding-left:0;list-style:none;margin:8px 0}.list li{padding:10px 0;border-bottom:1px solid var(--line)}.list li:last-child{border-bottom:0}
+.notice{background:#1b1f26;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0}
+textarea{width:100%;background:#0f1115;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;margin:8px 0;resize:vertical}
+textarea:focus{outline:2px solid var(--a);outline-offset:2px}
+.draft{padding:12px 0;border-top:1px solid var(--line)}.draft:first-of-type{border-top:0}.btns2{display:flex;gap:8px;flex-wrap:wrap}.btns2 .btn{flex:1;min-width:110px;text-align:center}
