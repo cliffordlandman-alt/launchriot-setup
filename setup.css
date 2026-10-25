@@ -37,3 +37,7 @@ form .btn{margin-top:14px;width:100%}.err{color:#ff8a7a;min-height:1.2em;margin-
 textarea{width:100%;background:#0f1115;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;margin:8px 0;resize:vertical}
 textarea:focus{outline:2px solid var(--a);outline-offset:2px}
 .draft{padding:12px 0;border-top:1px solid var(--line)}.draft:first-of-type{border-top:0}.btns2{display:flex;gap:8px;flex-wrap:wrap}.btns2 .btn{flex:1;min-width:110px;text-align:center}
+
+.paircode{font:700 34px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--a);background:#0f1115;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;margin:8px 0;user-select:all}
+input[type=tel]{width:100%;background:#0f1115;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;min-height:44px}
+.btn.wide{width:100%;margin-top:12px}

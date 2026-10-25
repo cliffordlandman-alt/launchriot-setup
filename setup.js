@@ -42,18 +42,48 @@ function linkFor(key){
 function steps(key){var o=st||{},l=o.links&&o.links[key],a=(l&&l.instructions)||o[key+'_instructions'];return Array.isArray(a)?a.filter(function(x){return typeof x==='string'&&x}).slice(0,10):[]}
 function linkify(t){return esc(t)}
 function olist(a){return a.length?'<ol>'+a.map(function(x){return '<li>'+linkify(x)+'</li>'}).join('')+'</ol>':''}
-var gmEmail='',wa={state:null,url:null,connected:false,phone:null},waT=null,waOn=false;
+var gmEmail='',wa={state:null,url:null,connected:false,phone:null,mode:null,code:null,codeAt:0,num:'',busy:false,err:''},waT=null,waOn=false;
+function isPhone(){try{return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.matchMedia('(max-width:760px)').matches}catch(e){return false}}
+function waMode(){if(!wa.mode)wa.mode=isPhone()?'code':'qr';return wa.mode}
+function codeBody(){
+ var h='';
+ if(wa.code){var lft=Math.max(0,60-Math.floor((Date.now()-wa.codeAt)/1000));
+  h+='<p>Your code:</p><div class="paircode" aria-label="Pairing code">'+esc(wa.code)+'</div>'+(lft>0?'<p class="mut">Type it within about a minute.</p>':'<p class="err">This code may have expired. Get a new one below.</p>')+
+   '<ol><li>Open WhatsApp on this phone.</li><li>Go to Settings, then Linked devices.</li><li>Tap Link a device.</li><li>Tap <b>Link with phone number instead</b>.</li><li>Type the code above.</li></ol>'+
+   '<p class="mut">Then come back to this page. It updates by itself once you are connected.</p>'+
+   '<button class="btn alt" type="button" data-wa="new">Get a new code</button>';
+ }else{
+  h+='<p>Get a code to link WhatsApp on this phone. No scanning needed.</p><label for="wanum">Your WhatsApp number, with country code</label><input id="wanum" type="tel" inputmode="tel" autocomplete="tel" placeholder="+971 50 123 4567" value="'+esc(wa.num)+'">'+
+   '<button class="btn wide" type="button" data-wa="get"'+(wa.busy?' disabled':'')+'>'+(wa.busy?'Getting your code...':'Get my code')+'</button><div class="err" role="status">'+esc(wa.err)+'</div>';
+ }
+ return h+'<p><button class="linkbtn" type="button" data-wa="qr">On a computer? Scan a QR code instead</button></p>';
+}
+function getCode(){
+ var el=document.getElementById('wanum');if(el)wa.num=el.value;
+ var d=String(wa.num||'').replace(/\D/g,'');if(/^00/.test(d))d=d.slice(2);
+ if(d.length<8||d.length>15){wa.err='Enter your WhatsApp number with country code, e.g. +971 50 123 4567';updateWA(true);return}
+ wa.busy=true;wa.err='';updateWA(true);
+ req('/whatsapp/pair',{method:'POST',body:JSON.stringify({phone:'+'+d})}).then(function(r){
+  wa.busy=false;if(r&&typeof r.code==='string'&&r.code){wa.code=r.code;wa.codeAt=Date.now()}else wa.err='Could not get a code. Please try again.';updateWA(true);
+ }).catch(function(e){wa.busy=false;if(e.locked)return lockScreen();if(e.auth)return badLink();wa.err=e.status===409?'This WhatsApp is already linked or busy. Please refresh the page.':'Could not get a code. Please try again in a moment.';updateWA(true)});
+}
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-wa]');if(!b)return;var a=b.getAttribute('data-wa');
+ if(a==='code'){wa.mode='code';updateWA(true)}else if(a==='qr'){wa.mode='qr';updateWA(true)}else if(a==='get')getCode();else if(a==='new'){wa.code=null;updateWA(true)}});
+document.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&ev.target&&ev.target.id==='wanum'){ev.preventDefault();getCode()}});
+document.addEventListener('input',function(ev){if(ev.target&&ev.target.id==='wanum')wa.num=ev.target.value});
 function waState(){var l=st&&st.links&&st.links.whatsapp;return wa.state||(l&&l.state)||null}
 function waUrl(){var u=wa.url;if(u==null&&wa.state==null)u=linkFor('whatsapp');return typeof u==='string'&&/^(data:image\/(png|jpeg);base64,|https:\/\/)/.test(u)?u:null}
 function waBody(){
  var u=waUrl(),sv=waState();
+ if(sv!=='connecting'&&waMode()==='code')return codeBody();
+ var alt='<p><button class="linkbtn" type="button" data-wa="code">On this phone? Use a code instead</button></p>';
  if(sv==='unavailable'&&!u)return '<div class="wait">Your LaunchRiot contact will send your QR code here shortly. You do not need to do anything yet.</div>';
- if(u)return '<ol><li>Open WhatsApp on your phone.</li><li>Go to Settings, then Linked devices.</li><li>Tap Link a device and scan the code below.</li></ol><img class="qr" alt="WhatsApp QR code" src="'+esc(u)+'"><p class="mut">The code refreshes by itself. If it stops working, wait a moment for a new one.</p>';
+ if(u)return '<ol><li>Open WhatsApp on your phone.</li><li>Go to Settings, then Linked devices.</li><li>Tap Link a device and scan the code below.</li></ol><img class="qr" alt="WhatsApp QR code" src="'+esc(u)+'"><p class="mut">The code refreshes by itself. If it stops working, wait a moment for a new one.</p>'+alt;
  if(sv==='connecting')return '<div class="wait">Connecting your WhatsApp... one moment.</div>';
- return '<div class="wait"><span class="dots">Preparing your code...</span></div>';
+ return '<div class="wait"><span class="dots">Preparing your code...</span></div>'+alt;
 }
 function waDoneBody(){return wa.phone?'<div class="body"><p class="mut">Connected phone: <b>'+esc(wa.phone)+'</b></p></div>':''}
-function updateWA(){var el=document.querySelector('[data-step=whatsapp] .body');if(el&&!locked)el.innerHTML=waBody()}
+function updateWA(force){if(!force&&waMode()==='code'&&waState()!=='connecting'&&!(wa.code&&Date.now()-wa.codeAt>61000&&!wa.expShown))return;if(wa.code&&Date.now()-wa.codeAt>61000)wa.expShown=true;var el=document.querySelector('[data-step=whatsapp] .body');if(el&&!locked)el.innerHTML=waBody()}
 function waStop(){clearTimeout(waT);waT=null;waOn=false}
 function waLoop(){
  if(locked||!st||st.whatsapp===true||wa.connected){waStop();return}
@@ -81,7 +111,7 @@ function stepBody(key){
  }
  return '<p>Outlook connects with a simple forwarding rule, sending your Outlook mail to your Gmail.</p>'+olist(steps('outlook'))+'<button class="btn alt" id="oldone" type="button">I\'ve set this up</button> <span class="mut" id="olmsg" role="status"></span>';
 }
-function formBusy(){var ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')return true;var p=document.getElementById('gmpw'),e=document.getElementById('gmemail'),a=document.activeElement;return !!((p&&p.value)||(e&&e.value)||(a&&a.id&&/^(gmpw|gmemail|pkg)$/.test(a.id)))}
+function formBusy(){var ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')return true;var p=document.getElementById('gmpw'),e=document.getElementById('gmemail'),a=document.activeElement;return !!((p&&p.value)||(e&&e.value)||(a&&a.id&&/^(gmpw|gmemail|pkg|wanum)$/.test(a.id))||wa.busy)}
 var MSG={401:"That password didn't work, please check and try again",429:'Too many tries, please wait a few minutes',400:'Please enter your Gmail address and the app password',502:'We could not reach Gmail just now, please try again in a moment'};
 function wireForms(){
  var f=document.getElementById('gmform');
