@@ -1,12 +1,13 @@
 (function(){
 'use strict';
 var DOMAIN='145-241-118-107.sslip.io',WA='https://wa.me/971586444285',MAIL='mailto:hello@launchriot.online';
-var app=document.getElementById('app'),S='',C='',API='',st=null,tr=null,team=null,trAt=0,locked=false,pollT=null,tickT=null,slowT=null,first=true,saving=false,pkgSel=null;
+var app=document.getElementById('app'),S='',C='',API='',st=null,tr=null,team=null,trAt=0,locked=false,pollT=null,tickT=null,slowT=null,first=true,saving=false,pkgSel=null,RESET='',conn=null,upc=null,cxMsg={},pwAsked=false;
 var cfg=window.LR_TEST_API||null;
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function readHash(){
  var h=location.hash.replace(/^#/,''),p={};h.split('&').forEach(function(x){var i=x.indexOf('=');if(i>0)p[x.slice(0,i)]=decodeURIComponent(x.slice(i+1))});
  if(p.s){try{sessionStorage.setItem('lr_s',p.s)}catch(e){}}
+ if(p.reset)RESET=p.reset;if(!p.c){var qc=/[?&]c=([a-z0-9-]{4,32})/.exec(location.search);if(qc)p.c=qc[1]}
  if(p.c){try{sessionStorage.setItem('lr_c',p.c)}catch(e){}}
  if(location.hash){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
  try{S=p.s||sessionStorage.getItem('lr_s')||'';C=p.c||sessionStorage.getItem('lr_c')||''}catch(e){S=p.s||'';C=p.c||''}
@@ -65,7 +66,7 @@ function getCode(){
  wa.busy=true;wa.err='';updateWA(true);
  req('/whatsapp/pair',{method:'POST',body:JSON.stringify({phone:'+'+d})}).then(function(r){
   wa.busy=false;if(r&&typeof r.code==='string'&&r.code){wa.code=r.code;wa.codeAt=Date.now()}else wa.err='Could not get a code. Please try again.';updateWA(true);
- }).catch(function(e){wa.busy=false;if(e.locked)return lockScreen();if(e.auth)return badLink();wa.err=e.status===409?'This WhatsApp is already linked or busy. Please refresh the page.':'Could not get a code. Please try again in a moment.';updateWA(true)});
+ }).catch(function(e){wa.busy=false;if(e.locked)return lockScreen();if(e.auth)return noAuth();wa.err=e.status===409?'This WhatsApp is already linked or busy. Please refresh the page.':'Could not get a code. Please try again in a moment.';updateWA(true)});
 }
 document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-wa]');if(!b)return;var a=b.getAttribute('data-wa');
  if(a==='code'){wa.mode='code';updateWA(true)}else if(a==='qr'){wa.mode='qr';updateWA(true)}else if(a==='get')getCode();else if(a==='new'){wa.code=null;updateWA(true)}});
@@ -92,7 +93,7 @@ function waLoop(){
   wa.state=typeof r.state==='string'?r.state:null;wa.url=(typeof r.qr_url==='string'&&r.qr_url)?r.qr_url:null;
   if(r.connected===true||wa.state==='connected'){wa.connected=true;wa.url=null;return waDone()}
   updateWA();
- }).catch(function(e){if(e.locked)return lockScreen();if(e.auth)return badLink()}).then(function(){if(!locked&&waOn&&!wa.connected&&st&&st.whatsapp!==true)waT=setTimeout(waLoop,4000)});
+ }).catch(function(e){if(e.locked)return lockScreen();if(e.auth)return noAuth()}).then(function(){if(!locked&&waOn&&!wa.connected&&st&&st.whatsapp!==true)waT=setTimeout(waLoop,4000)});
 }
 function waDone(){waStop();
  return req('/whatsapp/status').then(function(r){wa.phone=typeof r.phone==='string'?r.phone:null}).catch(function(e){if(e.locked)throw e}).then(function(){return refresh()}).catch(function(e){if(e.locked)lockScreen()})}
@@ -111,7 +112,7 @@ function stepBody(key){
  }
  return '<p>Outlook connects with a simple forwarding rule, sending your Outlook mail to your Gmail.</p>'+olist(steps('outlook'))+'<button class="btn alt" id="oldone" type="button">I\'ve set this up</button> <span class="mut" id="olmsg" role="status"></span>';
 }
-function formBusy(){var ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')return true;var p=document.getElementById('gmpw'),e=document.getElementById('gmemail'),a=document.activeElement;return !!((p&&p.value)||(e&&e.value)||(a&&a.id&&/^(gmpw|gmemail|pkg|wanum)$/.test(a.id))||wa.busy)}
+function formBusy(){var ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')return true;var p=document.getElementById('gmpw'),e=document.getElementById('gmemail'),a=document.activeElement;return !!((p&&p.value)||(e&&e.value)||(a&&a.id&&/^(gmpw|gmemail|pkg|wanum|cx\w+)$/.test(a.id))||wa.busy)}
 var MSG={401:"That password didn't work, please check and try again",429:'Too many tries, please wait a few minutes',400:'Please enter your Gmail address and the app password',502:'We could not reach Gmail just now, please try again in a moment'};
 function wireForms(){
  var f=document.getElementById('gmform');
@@ -122,7 +123,7 @@ function wireForms(){
   go.disabled=true;go.textContent='Connecting...';saving=true;
   var body=JSON.stringify({email:gmEmail,app_password:pw.value});pw.value='';
   retryNet(function(){return req('/mail/connect',{method:'PUT',body:body,own401:true})}).then(function(){saving=false;body=null;return refresh()}).catch(function(e){
-   saving=false;body=null;if(e.locked)return lockScreen();if(e.auth)return badLink();
+   saving=false;body=null;if(e.locked)return lockScreen();if(e.auth)return noAuth();
    var er2=document.getElementById('gmerr'),g2=document.getElementById('gmgo');
    if(er2)er2.textContent=MSG[e.status]||'Something went wrong, please try again';if(g2){g2.disabled=false;g2.textContent='Connect Gmail'}});
  };
@@ -152,7 +153,7 @@ function loadInbox(){
   var n={todo:r[0]===null&&r[1]===null?null:{tasks:arr(r[0]).filter(function(t){return t.status!=='done'&&t.source==='message'}),fups:arr(r[1]).filter(function(t){return t.status!=='done'&&t.source==='message'})},drafts:r[2]===null?null:arr(r[2]).filter(function(d){return d.status==='pending'}),attn:r[3]===null?null:arr(r[3]).filter(function(m){return m.status!=='resolved'})};
   var ch=JSON.stringify(n)!==JSON.stringify({todo:inb.todo,drafts:inb.drafts,attn:inb.attn});inb.todo=n.todo;inb.drafts=n.drafts;inb.attn=n.attn;inb.ok=true;
   if(ch&&!formBusy()&&!saving)render();
- }).catch(function(e){if(e.locked)lockScreen();else if(e.auth)badLink()});
+ }).catch(function(e){if(e.locked)lockScreen();else if(e.auth)noAuth()});
 }
 function inboxStart(){if(inT||!usable())return;inT=setInterval(loadInbox,20000);loadInbox()}
 function sec(title,id,inner){return '<section class="card" data-sec="'+id+'"><h2>'+title+'</h2>'+inner+'</section>'}
@@ -204,11 +205,12 @@ function render(){
  var pl=pkgOptions();
  if(pl.length){
   h+='<section class="card"><h2>Your package</h2><p class="mut">Pick the one that suits you. You can change it later.</p><select id="pkg" aria-label="Package">'+pl.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===curPkg()?' selected':'')+'>'+esc(p.label)+'</option>'}).join('')+'</select> <span class="mut" id="pkgmsg" role="status"></span></section>'}
+ h+=connHtml();
  h+=inboxHtml();
  var keep=document.activeElement&&document.activeElement.id;
  app.innerHTML=h;
  var sel=document.getElementById('pkg');if(sel){sel.onchange=function(){savePkg(sel.value)};if(keep==='pkg')sel.focus()}
- wireForms();wireInbox();tick();waEnsure();inboxStart();
+ wireForms();wireInbox();wireConn();tick();waEnsure();inboxStart();
 }
 function curPkg(){return pkgSel!=null?pkgSel:(st&&st.package)||(team&&team.package)}
 function pkgOptions(){var L=st&&st.package_labels,ids=(st&&st.package_types)||[],out=[];
@@ -224,7 +226,9 @@ function poll(){
 }
 function start(){
  clearTimeout(pollT);clearInterval(tickT);clearTimeout(slowT);
- if(!S||!API)return badLink();
+ if(RESET&&API)return resetScreen();
+ if(!API)return badLink();
+ if(!S)return signIn();
  loading();
  slowT=setTimeout(function(){loading('Still setting things up. Thank you for your patience.')},12000);
  retry(function(){return req('/trial')},8,3000).then(function(t){
@@ -233,8 +237,78 @@ function start(){
   tr=t;trAt=Date.now();
   return retry(function(){return req('/setup-status')},4,2000).then(function(s){st=s;
    return req('/team').then(function(x){team=x}).catch(function(e){if(e.locked)throw e;team=null})
-  }).then(function(){render();tickT=setInterval(tick,1000);setInterval(function(){if(!locked)syncTrial()},60000);pollT=setTimeout(poll,5000)});
- }).catch(function(e){clearTimeout(slowT);if(e.locked)return lockScreen();if(e.auth)return badLink();failScreen()});
+  }).then(function(){render();tickT=setInterval(tick,1000);setInterval(function(){if(!locked)syncTrial()},60000);pollT=setTimeout(poll,5000);askPw();loadConn()});
+ }).catch(function(e){clearTimeout(slowT);if(e.locked)return lockScreen();if(e.auth)return noAuth();failScreen()});
+}
+function noAuth(){S='';try{sessionStorage.removeItem('lr_s')}catch(e){}clearTimeout(pollT);clearInterval(inT);inT=null;return API?signIn():badLink()}
+function pjson(path,b){return fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){j._s=r.status;return j})})}
+function eye(id){return '<button type="button" class="linkbtn eye" data-eye="'+id+'" aria-label="Show password">Show</button>'}
+function wireEyes(root){Array.prototype.forEach.call((root||document).querySelectorAll('[data-eye]'),function(b){b.onclick=function(){var ids=b.getAttribute('data-eye').split(',');var show=b.textContent==='Show';ids.forEach(function(i){var x=document.getElementById(i);if(x)x.type=show?'text':'password'});b.textContent=show?'Hide':'Show';b.setAttribute('aria-label',show?'Hide password':'Show password')}})}
+function pwFields(){return '<label>New password<input id="cxp1" type="password" autocomplete="new-password" minlength="8" required></label><label>Confirm password<input id="cxp2" type="password" autocomplete="new-password" minlength="8" required></label><p>'+eye('cxp1,cxp2')+' <span class="mut">At least 8 characters.</span></p>'}
+function pwCheck(){var a=document.getElementById('cxp1').value,b=document.getElementById('cxp2').value;if(a.length<8)return 'Use at least 8 characters.';if(a!==b)return 'The two passwords do not match.';return ''}
+function signIn(msg){clearTimeout(slowT);
+ app.innerHTML='<div class="card auth"><h1>Sign in</h1><p class="mut">'+esc(msg||'Sign in to your workspace.')+'</p><form id="lf"><label>Email<input id="cxem" type="email" autocomplete="username" required></label><label>Password<input id="cxpw" type="password" autocomplete="current-password" required></label><p>'+eye('cxpw')+'</p><button class="btn" type="submit">Sign in</button> <span class="mut" id="lmsg" role="status"></span></form><p><button class="linkbtn" id="fgo" type="button">Forgot password?</button></p><form id="ff" hidden><p class="mut">Enter your email and we will send you a link to set a new password. The link works once and for 30 minutes.</p><label>Email<input id="cxfe" type="email" autocomplete="email" required></label><button class="btn alt" type="submit">Send link</button> <span class="mut" id="fmsg" role="status"></span></form></div>';
+ wireEyes(app);
+ document.getElementById('fgo').onclick=function(){var f=document.getElementById('ff');f.hidden=false;document.getElementById('cxfe').value=document.getElementById('cxem').value;document.getElementById('cxfe').focus()};
+ document.getElementById('lf').onsubmit=function(ev){ev.preventDefault();var m=document.getElementById('lmsg');m.textContent='Signing in...';
+  pjson('/auth/login',{email:document.getElementById('cxem').value,password:document.getElementById('cxpw').value}).then(function(j){
+   if(j._s===200&&j.session){S=j.session;try{sessionStorage.setItem('lr_s',S)}catch(e){}pwAsked=false;start()}
+   else m.textContent=j._s===429?'Too many tries. Please wait 15 minutes.':'Email or password is not right.'}).catch(function(){m.textContent='Could not reach the server. Please try again.'})};
+ document.getElementById('ff').onsubmit=function(ev){ev.preventDefault();var m=document.getElementById('fmsg');m.textContent='Sending...';
+  pjson('/auth/forgot',{email:document.getElementById('cxfe').value}).then(function(j){m.textContent=j._s===429?'Too many requests. Please wait a few minutes.':"If that email exists, we've sent a link. Check your inbox."}).catch(function(){m.textContent='Could not reach the server. Please try again.'})};
+}
+function resetScreen(){
+ app.innerHTML='<div class="card auth"><h1>Set a new password</h1><form id="rf">'+pwFields()+'<button class="btn" type="submit">Save new password</button> <span class="mut" id="rmsg" role="status"></span></form></div>';wireEyes(app);
+ document.getElementById('rf').onsubmit=function(ev){ev.preventDefault();var m=document.getElementById('rmsg'),bad=pwCheck();if(bad){m.textContent=bad;return}m.textContent='Saving...';
+  pjson('/auth/reset',{token:RESET,password:document.getElementById('cxp1').value}).then(function(j){
+   if(j._s===200){RESET='';S='';try{sessionStorage.removeItem('lr_s')}catch(e){}signIn('Your password is set. Sign in with your new password.');var e=document.getElementById('cxem');if(e&&j.email)e.value=j.email}
+   else{m.textContent=j.error||'Something went wrong. Please try again.';if(/expired|not valid/.test(j.error||'')){RESET=''}}}).catch(function(){m.textContent='Could not reach the server. Please try again.'})};
+}
+function askPw(){if(pwAsked||locked)return;pwAsked=true;req('/account').then(function(a){if(!a.must_set_password)return;
+ var d=document.createElement('div');d.className='modal';d.setAttribute('role','dialog');d.setAttribute('aria-modal','true');d.setAttribute('aria-labelledby','pwh');
+ d.innerHTML='<div class="mbox"><h2 id="pwh">Set your own password</h2><p class="mut">Choose a password so you can sign in any time.</p><form id="mf">'+pwFields()+'<button class="btn" type="submit">Save password</button>'+(a.can_snooze?' <button class="btn alt" type="button" id="mlater">Later</button>':'')+' <p class="mut" id="mmsg" role="status"></p></form></div>';
+ document.body.appendChild(d);wireEyes(d);document.getElementById('cxp1').focus();
+ var lt=document.getElementById('mlater');if(lt)lt.onclick=function(){req('/account/password-later',{method:'POST',body:'{}'}).catch(function(){});d.remove()};
+ document.getElementById('mf').onsubmit=function(ev){ev.preventDefault();var m=document.getElementById('mmsg'),bad=pwCheck();if(bad){m.textContent=bad;return}m.textContent='Saving...';
+  req('/account/password',{method:'POST',body:JSON.stringify({password:document.getElementById('cxp1').value,confirm:document.getElementById('cxp2').value})}).then(function(){m.textContent='Saved.';setTimeout(function(){d.remove()},700)}).catch(function(e){m.textContent=e.status===400?'Use at least 8 characters, and make both fields match.':'Could not save. Please try again.'})};
+}).catch(function(){})}
+function loadConn(){if(locked||!S)return;req('/connections').then(function(c){var ch=JSON.stringify(c)!==JSON.stringify(conn);conn=c;
+ return (c.calendar&&c.calendar.accounts&&c.calendar.accounts.length?req('/calendar/upcoming?days=14').then(function(u){upc=arr(u)}):Promise.resolve(upc=null)).then(function(){if(ch&&!saving&&!formBusy())render()})}).catch(function(e){if(e.locked)lockScreen();else if(e.auth)noAuth()});
+ clearTimeout(window.__cxT);window.__cxT=setTimeout(loadConn,30000)}
+function pill(ok,txt){return '<span class="pill'+(ok?' ok':'')+'">'+esc(txt)+'</span>'}
+function crow(name,status,ok,act){return '<div class="crow"><div><b>'+esc(name)+'</b><div class="mut">'+status+'</div></div><div class="cact">'+act+'</div></div>'}
+function connHtml(){if(!conn)return '';var h='',c=conn;
+ var w=c.whatsapp||{},wl=w.state==='connected'||(st&&st.whatsapp===true);
+ h+=crow('WhatsApp',wl?('Connected'+(wa.phone?' &middot; '+esc(wa.phone):'')):'Not connected',wl,wl?'<button class="btn alt" data-cx="wadisc" type="button">Disconnect</button>':'<button class="btn alt" data-cx="wago" type="button">Connect</button>');
+ if(wl)h+='<p class="mut small">One WhatsApp number per workspace. To use a different number, disconnect this one first.</p>';
+ var g=(c.gmail&&c.gmail.accounts)||[],gmax=(c.gmail&&c.gmail.max)||3;
+ g.forEach(function(a){h+=crow('Gmail',esc(a.label)+' &middot; '+(a.status==='connected'?'Connected':'Needs attention'),a.status==='connected','<button class="btn alt" data-cx="gmdisc" data-id="'+a.id+'" type="button">Disconnect</button>')});
+ if(!g.length)h+=crow('Gmail','Not connected',false,'<button class="btn alt" data-cx="gmgo" type="button">Connect</button>');
+ else if(g.length<gmax)h+='<details class="cadd"><summary>Add another Gmail</summary><form id="cxgf"><label>Gmail address<input id="cxge" type="email" autocomplete="off" required></label><label>App password<input id="cxgp" type="password" autocomplete="off" required></label>'+appLink()+'<button class="btn" type="submit">Connect</button> <span class="mut" data-m="gm" role="status">'+esc(cxMsg.gm||'')+'</span></form></details>';
+ else h+='<p class="mut small">You have connected the most mailboxes allowed ('+gmax+').</p>';
+ var o=c.outlook||{};h+=crow('Outlook',o.seen?'Forwarding is working':(o.set_up?'Set up, waiting for the first email':'Not set up'),!!o.seen,'');
+ if(!o.seen)h+='<details class="cadd"><summary>How to connect Outlook</summary>'+(g.length?olist(['In Outlook, open Settings, then Mail, then Forwarding.','Turn on forwarding and enter your connected Gmail address: '+g[0].label+'.','Save. New Outlook mail will show up here within a few minutes.']):'<p class="mut">Connect Gmail first. Outlook mail is forwarded to it.</p>')+'</details>';
+ var cal=c.calendar||{},cs=cal.accounts||[];
+ cs.forEach(function(f){h+=crow('Calendar',esc(f.label)+' &middot; '+(f.status==='connected'?(f.event_count+' upcoming events'):'Could not read it: '+esc(f.error||'please check the address')),f.status==='connected','<button class="btn alt" data-cx="calsync" data-id="'+f.id+'" type="button">Refresh</button> <button class="btn alt" data-cx="caldel" data-id="'+f.id+'" type="button">Remove</button>')});
+ if(cs.length<(cal.max||3))h+='<details class="cadd"'+(cs.length?'':' open')+'><summary>'+(cs.length?'Add another calendar':'Connect your Google Calendar')+'</summary>'+olist(cal.instructions||[])+'<form id="cxcf"><label>Secret address<input id="cxcu" type="url" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" required></label><label>Name (optional)<input id="cxcl" type="text" maxlength="60" placeholder="Work"></label><button class="btn" type="submit">Connect calendar</button> <span class="mut" data-m="cal" role="status">'+esc(cxMsg.cal||'')+'</span></form><p class="mut small">Your assistant can read your calendar but cannot change it. It refreshes about every 15 minutes.</p></details>';
+ if(upc&&upc.length)h+='<h3>Coming up</h3><ul class="evs">'+upc.slice(0,8).map(function(e){return '<li><b>'+esc(e.title)+'</b> <span class="mut">'+(e.all_day?new Date(e.starts_at).toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}):fdate(e.starts_at))+(e.location?' &middot; '+esc(e.location):'')+'</span></li>'}).join('')+'</ul>';
+ else if(cs.length)h+='<p class="mut small">No events in the next 14 days.</p>';
+ return '<section class="card" data-sec="conn"><h2>Connections</h2><p class="mut">Everything your assistant can see. <span data-m="top" role="status">'+esc(cxMsg.top||'')+'</span></p>'+h+'</section>'}
+function cxDo(key,p){cxMsg[key]='Working...';var m=document.querySelector('[data-m='+key+']');if(m)m.textContent=cxMsg[key];saving=true;
+ return p.then(function(){cxMsg[key]='';saving=false;return req('/setup-status').then(function(s){st=s})}).catch(function(e){saving=false;if(e.locked)return lockScreen();if(e.auth)return noAuth();cxMsg[key]=e.msg||'That did not work. Please try again.'}).then(function(){conn=null;loadConn()})}
+function req2(path,opt){opt=opt||{};return fetch(API+path,{method:opt.method||'GET',headers:{'Authorization':'Bearer '+S,'Content-Type':'application/json'},body:opt.body}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){if(r.status===401){var e=new Error('auth');e.auth=true;throw e}if(r.status===403&&j.locked){var l=new Error('locked');l.locked=true;throw l}if(!r.ok){var x=new Error('http');x.msg=j.error;throw x}return j})})}
+function wireConn(){var sec=document.querySelector('[data-sec=conn]');if(!sec)return;
+ Array.prototype.forEach.call(sec.querySelectorAll('[data-cx]'),function(b){b.onclick=function(){var k=b.getAttribute('data-cx'),id=b.getAttribute('data-id');
+  if(k==='wago'||k==='gmgo'){var t=document.querySelector('[data-step='+(k==='wago'?'whatsapp':'gmail')+']');if(t)t.scrollIntoView({behavior:'smooth'});return}
+  if((k==='wadisc'||k==='gmdisc'||k==='caldel')&&!confirm(k==='wadisc'?'Disconnect WhatsApp? Your assistant will stop seeing new WhatsApp messages until you connect again.':(k==='gmdisc'?'Disconnect this mailbox? Its stored mail will be removed.':'Remove this calendar?')))return;
+  b.disabled=true;
+  if(k==='wadisc'){wa.state=null;wa.url=null;wa.connected=false;wa.phone=null;wa.tried=false;wa.code=null;cxDo('top',req2('/whatsapp/disconnect',{method:'POST',body:'{}'}))}
+  else if(k==='gmdisc')cxDo('top',req2('/mail/disconnect?account='+encodeURIComponent(id),{method:'DELETE'}));
+  else if(k==='caldel')cxDo('top',req2('/calendar/ical/'+id,{method:'DELETE'}));
+  else if(k==='calsync')cxDo('top',req2('/calendar/ical/'+id+'/sync',{method:'POST',body:'{}'}));
+ }});
+ var gf=document.getElementById('cxgf');if(gf)gf.onsubmit=function(ev){ev.preventDefault();var e=document.getElementById('cxge').value,pw=document.getElementById('cxgp').value;document.getElementById('cxgp').value='';cxDo('gm',req2('/mail/connect',{method:'PUT',body:JSON.stringify({email:e,app_password:pw,account:'new'})}))};
+ var cf=document.getElementById('cxcf');if(cf)cf.onsubmit=function(ev){ev.preventDefault();var u=document.getElementById('cxcu').value,l=document.getElementById('cxcl').value;document.getElementById('cxcu').value='';cxDo('cal',req2('/calendar/ical',{method:'POST',body:JSON.stringify({url:u,label:l})}))};
 }
 readHash();start();
 })();
